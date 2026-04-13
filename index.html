@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Living Dex">
+<meta name="theme-color" content="#3B6D11">
+<title>Living Dex Tracker</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f0ec; color: #111; min-height: 100vh; }
+.app { max-width: 1100px; margin: 0 auto; padding: 0.75rem; }
+.header { text-align: center; padding: 1rem 0 0.5rem; }
+.header h1 { font-size: 22px; font-weight: 700; color: #3B6D11; }
+.header p { font-size: 12px; color: #888; margin-top: 2px; }
+.config-btn { position: fixed; top: 10px; right: 10px; z-index: 200; background: #fff; border: 1px solid #ddd; border-radius: 50%; width: 38px; height: 38px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 300; align-items: center; justify-content: center; }
+.overlay.open { display: flex; }
+.modal { background: #fff; border-radius: 16px; padding: 1.5rem; max-width: 420px; width: 90%; }
+.modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 1rem; }
+.modal label { font-size: 12px; color: #666; display: block; margin-bottom: 4px; margin-top: 12px; }
+.modal input { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; color: #111; }
+.modal input:focus { outline: none; border-color: #3B6D11; }
+.modal .hint { font-size: 11px; color: #aaa; margin-top: 4px; line-height: 1.4; }
+.modal .hint a { color: #185FA5; }
+.modal-btns { display: flex; gap: 8px; margin-top: 1.2rem; }
+.btn { padding: 9px 16px; border-radius: 10px; border: 1px solid #ddd; background: #fff; font-size: 13px; cursor: pointer; flex: 1; }
+.btn.primary { background: #3B6D11; color: #fff; border-color: #3B6D11; }
+.btn.danger { border-color: #f09595; color: #A32D2D; }
+.sync-status { font-size: 11px; text-align: center; margin-top: 10px; color: #888; min-height: 16px; }
+.sync-status.ok { color: #3B6D11; }
+.sync-status.err { color: #A32D2D; }
+.tabs-wrapper { position: sticky; top: 0; z-index: 10; background: #f0f0ec; padding: 0.4rem 0; }
+.tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex-shrink: 0; padding: 5px 11px; border-radius: 20px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px; color: #333; }
+.tab:active { transform: scale(0.96); }
+.tab.active { background: #3B6D11; color: #fff; border-color: #3B6D11; }
+.tab .tab-pct { font-size: 10px; opacity: 0.7; }
+.stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0.5rem 0 0.6rem; }
+.stat-card { background: #fff; border-radius: 10px; border: 1px solid #e8e8e8; padding: 7px 10px; }
+.stat-card .lbl { font-size: 10px; color: #888; }
+.stat-card .val { font-size: 18px; font-weight: 700; color: #111; }
+.stat-card.green .val { color: #3B6D11; }
+.progress-wrap { background: #e0e0e0; border-radius: 6px; height: 6px; margin-bottom: 0.6rem; overflow: hidden; }
+.progress-fill { background: linear-gradient(90deg, #3B6D11, #639922); height: 6px; border-radius: 6px; transition: width 0.4s; }
+.controls { display: flex; gap: 8px; margin-bottom: 0.6rem; flex-wrap: wrap; align-items: center; }
+.search-box { flex: 1; min-width: 140px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 10px; background: #fff; font-size: 14px; color: #111; -webkit-appearance: none; }
+.search-box:focus { outline: none; border-color: #3B6D11; }
+.filters { display: flex; gap: 5px; flex-wrap: wrap; }
+.fbtn { padding: 7px 10px; border: 1px solid #ddd; border-radius: 10px; background: #fff; cursor: pointer; font-size: 12px; color: #333; white-space: nowrap; }
+.fbtn:active { transform: scale(0.96); }
+.fbtn.active { background: #3B6D11; color: #fff; border-color: #3B6D11; }
+.batch-row { display: flex; gap: 6px; margin-bottom: 0.6rem; flex-wrap: wrap; }
+.bbtn { padding: 6px 11px; border: 1px solid #ddd; border-radius: 10px; background: #fff; cursor: pointer; font-size: 12px; color: #333; }
+.bbtn.danger { border-color: #f09595; color: #A32D2D; }
+.gen-header { font-size: 11px; font-weight: 700; color: #888; margin: 0.9rem 0 0.35rem; padding-bottom: 3px; border-bottom: 1px solid #e8e8e8; display: flex; justify-content: space-between; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 5px; }
+.poke-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 5px 3px 4px; text-align: center; cursor: pointer; position: relative; user-select: none; transition: transform 0.1s; }
+.poke-card:active { transform: scale(0.92); }
+.poke-card.captured { background: #EAF3DE; border-color: #97C459; }
+.poke-sprite { width: 48px; height: 48px; image-rendering: pixelated; display: block; margin: 0 auto; }
+.poke-num { font-size: 9px; color: #bbb; margin-bottom: 1px; }
+.poke-name { font-size: 9px; color: #333; line-height: 1.2; }
+.poke-card.captured .poke-num { color: #3B6D11; }
+.poke-card.captured .poke-name { color: #3B6D11; font-weight: 700; }
+.poke-check { position: absolute; top: 3px; right: 3px; width: 13px; height: 13px; background: #3B6D11; border-radius: 50%; }
+.poke-check::after { content:''; display:block; width:4px; height:6px; border-right:2px solid #fff; border-bottom:2px solid #fff; transform:rotate(40deg) translate(3px,2px); }
+.home-badge { position: absolute; top: 3px; left: 3px; font-size: 8px; background: #EAF3DE; color: #3B6D11; border-radius: 4px; padding: 0 3px; font-weight: 700; }
+.loading-screen { text-align: center; padding: 4rem 1rem; }
+.spinner { width: 38px; height: 38px; border: 3px solid #e0e0e0; border-top-color: #3B6D11; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-screen p { color: #666; font-size: 14px; }
+.loading-screen .sub { color: #aaa; font-size: 12px; margin-top: 4px; }
+.lbar-wrap { margin: 1rem auto 0; background: #e0e0e0; border-radius: 6px; height: 6px; max-width: 200px; overflow: hidden; }
+.lbar-fill { background: #3B6D11; height: 6px; border-radius: 6px; transition: width 0.3s; }
+.empty-state { text-align: center; padding: 2rem; color: #aaa; font-size: 13px; }
+.names-note { font-size: 11px; color: #aaa; text-align: center; padding: 3px; margin-bottom: 4px; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3B6D11; color: #fff; padding: 9px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.25s; pointer-events: none; z-index: 400; white-space: nowrap; }
+.toast.show { opacity: 1; }
+.err-banner { background: #FCEBEB; border: 1px solid #f09595; border-radius: 10px; padding: 10px 14px; margin-bottom: 0.75rem; font-size: 12px; color: #A32D2D; }
+.info-banner { background: #E6F1FB; border: 1px solid #85B7EB; border-radius: 10px; padding: 10px 14px; margin-bottom: 0.75rem; font-size: 12px; color: #0C447C; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>🌿 Living Dex Tracker</h1>
+    <p>Données PokéAPI · Sync GitHub</p>
+  </div>
+  <div id="root">
+    <div class="loading-screen">
+      <div class="spinner"></div>
+      <p>Chargement des Pokédex...</p>
+      <p class="sub">Connexion à PokéAPI</p>
+      <div class="lbar-wrap"><div class="lbar-fill" id="lbar" style="width:0%"></div></div>
+    </div>
+  </div>
+</div>
+
+<button class="config-btn" onclick="openConfig()" title="Paramètres sync GitHub">⚙️</button>
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h2>⚙️ Synchronisation GitHub</h2>
+    <label>Nom d'utilisateur GitHub</label>
+    <input id="cfg-user" type="text" placeholder="monpseudo" />
+    <label>Nom du dépôt</label>
+    <input id="cfg-repo" type="text" placeholder="living-dex" />
+    <label>Token GitHub (permission : Contents)</label>
+    <input id="cfg-token" type="password" placeholder="ghp_xxxxxxxxxxxx" />
+    <p class="hint">Créer un token : <a href="https://github.com/settings/tokens/new" target="_blank">github.com/settings/tokens/new</a><br>Coche uniquement <strong>repo</strong>.</p>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeConfig()">Annuler</button>
+      <button class="btn primary" onclick="saveConfig()">Enregistrer & Sync</button>
+    </div>
+    <div class="sync-status" id="sync-status"></div>
+    <div class="modal-btns" style="margin-top:8px">
+      <button class="btn danger" onclick="exportBackup()">⬇ Export JSON</button>
+      <button class="btn" onclick="importBackup()">⬆ Import JSON</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
+
+<script>
+const GAMES = [
+  { id:'home',    name:'Pokémon Home',     icon:'🏠', pokedexes:['national'],       isHome:true },
+  { id:'scarlet', name:'Écarlate',         icon:'🔴', pokedexes:['paldea'] },
+  { id:'violet',  name:'Violet',           icon:'🟣', pokedexes:['paldea'] },
+  { id:'sword',   name:'Épée',             icon:'⚔️', pokedexes:['galar'] },
+  { id:'shield',  name:'Bouclier',         icon:'🛡️', pokedexes:['galar'] },
+  { id:'bdsp',    name:'Diamant/Perle',    icon:'💎', pokedexes:['updated-sinnoh'] },
+  { id:'la',      name:'Légendes: Arceus', icon:'⭐', pokedexes:['hisui'] },
+  { id:'lgpe',    name:'Pikachu/Évoli',    icon:'⚡', pokedexes:['letsgo-kanto'] },
+];
+
+const GENS = [
+  {id:1,name:'Génération I',   r:[1,151]},
+  {id:2,name:'Génération II',  r:[152,251]},
+  {id:3,name:'Génération III', r:[252,386]},
+  {id:4,name:'Génération IV',  r:[387,493]},
+  {id:5,name:'Génération V',   r:[494,649]},
+  {id:6,name:'Génération VI',  r:[650,721]},
+  {id:7,name:'Génération VII', r:[722,809]},
+  {id:8,name:'Génération VIII',r:[810,905]},
+  {id:9,name:'Génération IX',  r:[906,1025]},
+];
+
+const API = 'https://pokeapi.co/api/v2';
+const SPRITE = id => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+const genOf = id => GENS.find(g => id >= g.r[0] && id <= g.r[1]);
+
+let nameCache = {};
+let gameLists = {};
+let state = { activeGame:'home', search:'', filter:'all', captured:{}, loading:true, namesLoading:false, error:null };
+let ghConfig = { user:'', repo:'', token:'' };
+let syncTimer = null;
+let ghSha = null;
+
+const saveLocal = () => {
+  try { localStorage.setItem('ldex_v4', JSON.stringify({captured:state.captured, names:nameCache})); } catch(e){}
+};
+const loadLocal = () => {
+  try {
+    const d = localStorage.getItem('ldex_v4');
+    if (d) { const p=JSON.parse(d); state.captured=p.captured||{}; nameCache=p.names||{}; }
+    const c = localStorage.getItem('ldex_gh');
+    if (c) ghConfig = JSON.parse(c);
+  } catch(e){}
+};
+
+const ghFile = () => `https://api.github.com/repos/${ghConfig.user}/${ghConfig.repo}/contents/living-dex-data.json`;
+const ghHeaders = () => ({'Authorization':`token ${ghConfig.token}`,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'});
+
+const ghLoad = async () => {
+  if (!ghConfig.token) return false;
+  try {
+    const res = await fetch(ghFile(), {headers: ghHeaders()});
+    if (res.status === 404) return true;
+    if (!res.ok) return false;
+    const data = await res.json();
+    ghSha = data.sha;
+    const content = JSON.parse(atob(data.content.replace(/\n/g,'')));
+    state.captured = content.captured || {};
+    if (content.names) Object.assign(nameCache, content.names);
+    saveLocal();
+    return true;
+  } catch(e) { return false; }
+};
+
+const ghSave = async () => {
+  if (!ghConfig.token) return;
+  try {
+    const payload = {captured:state.captured, names:nameCache, updatedAt:new Date().toISOString()};
+    const body = {message:'Living Dex update', content:btoa(unescape(encodeURIComponent(JSON.stringify(payload))))};
+    if (ghSha) body.sha = ghSha;
+    const res = await fetch(ghFile(), {method:'PUT', headers:ghHeaders(), body:JSON.stringify(body)});
+    if (res.ok) { const d=await res.json(); ghSha=d.content.sha; return true; }
+    return false;
+  } catch(e) { return false; }
+};
+
+const scheduleSave = () => {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(async () => {
+    if (!ghConfig.token) return;
+    const ok = await ghSave();
+    showToast(ok ? '☁️ Sauvegardé sur GitHub' : '⚠️ Erreur sync GitHub');
+  }, 1500);
+};
+
+const fetchDex = async (slug) => {
+  const res = await fetch(`${API}/pokedex/${slug}/`);
+  if (!res.ok) throw new Error(`${slug} HTTP ${res.status}`);
+  const data = await res.json();
+  return data.pokemon_entries.map(e => {
+    const parts = e.pokemon_species.url.split('/').filter(Boolean);
+    return {localNum: e.entry_number, nationalId: parseInt(parts[parts.length-1], 10)};
+  }).sort((a,b) => a.localNum - b.localNum);
+};
+
+const fetchName = async (id) => {
+  if (nameCache[id]) return;
+  try {
+    const res = await fetch(`${API}/pokemon-species/${id}/`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const fr = data.names.find(n => n.language.name === 'fr');
+    nameCache[id] = fr ? fr.name : data.name;
+  } catch(e) {}
+};
+
+const preloadNames = async (ids) => {
+  const missing = ids.filter(id => !nameCache[id]);
+  for (let i = 0; i < missing.length; i += 15) {
+    await Promise.all(missing.slice(i, i+15).map(fetchName));
+    saveLocal();
+    render();
+  }
+};
+
+const ckey = (g, id) => `${g}_${id}`;
+const isCap = (g, id) => !!state.captured[ckey(g,id)];
+const getName = id => nameCache[id] || `#${id}`;
+const capCount = gid => (gameLists[gid]||[]).filter(e => isCap(gid, e.nationalId)).length;
+
+const toggle = (gid, nationalId) => {
+  const k = ckey(gid, nationalId);
+  if (state.captured[k]) {
+    delete state.captured[k];
+  } else {
+    state.captured[k] = 1;
+    if (gid !== 'home') state.captured[ckey('home', nationalId)] = 1;
+  }
+  saveLocal();
+  scheduleSave();
+  render();
+};
+
+const showToast = msg => {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+};
+
+const render = () => {
+  const root = document.getElementById('root');
+  if (state.loading) return;
+
+  const game = GAMES.find(g => g.id === state.activeGame);
+  const list = gameLists[game.id] || [];
+  const total = list.length;
+  const capCnt = capCount(game.id);
+  const pct = total > 0 ? Math.round((capCnt/total)*100) : 0;
+  const search = state.search.toLowerCase().trim();
+  const isHome = !!game.isHome;
+
+  const filtered = list.filter(e => {
+    const name = getName(e.nationalId).toLowerCase();
+    const ms = !search || name.includes(search) || String(e.nationalId).includes(search) || String(e.localNum).includes(search);
+    const cap = isCap(game.id, e.nationalId);
+    const mf = state.filter==='all' || (state.filter==='captured'&&cap) || (state.filter==='missing'&&!cap);
+    return ms && mf;
+  });
+
+  const grouped = {};
+  for (const e of filtered) {
+    const gen = genOf(e.nationalId); const gid = gen ? gen.id : 0;
+    if (!grouped[gid]) grouped[gid] = [];
+    grouped[gid].push(e);
+  }
+
+  const tabsHtml = GAMES.map(g => {
+    const c = capCount(g.id), t = (gameLists[g.id]||[]).length;
+    const p = t > 0 ? Math.round((c/t)*100) : 0;
+    return `<button class="tab${g.id===state.activeGame?' active':''}" onclick="switchGame('${g.id}')">
+      ${g.icon} ${g.name} <span class="tab-pct">${c}/${t}</span>
+    </button>`;
+  }).join('');
+
+  const infoHtml = !isHome
+    ? `<div class="info-banner">ℹ️ Cocher un Pokémon ici le marque aussi dans <b>Pokémon Home</b> automatiquement.</div>` : '';
+
+  const noGhHtml = !ghConfig.token
+    ? `<div class="info-banner">⚙️ Configure GitHub (bouton ⚙️) pour synchroniser entre tes appareils.</div>` : '';
+
+  const sections = Object.entries(grouped).sort(([a],[b]) => +a - +b).map(([gid, entries]) => {
+    const gen = GENS.find(g => g.id === +gid);
+    const gc = entries.filter(e => isCap(game.id, e.nationalId)).length;
+    const cards = entries.map(e => {
+      const cap = isCap(game.id, e.nationalId);
+      const name = getName(e.nationalId);
+      const inHome = !isHome && isCap('home', e.nationalId) && !cap;
+      const displayNum = isHome
+        ? String(e.nationalId).padStart(4,'0')
+        : String(e.localNum).padStart(3,'0');
+      return `<div class="poke-card${cap?' captured':''}${inHome?' home-only':''}" onclick="doToggle('${game.id}',${e.nationalId})">
+        ${cap ? '<div class="poke-check"></div>' : ''}
+        ${inHome ? '<div class="home-badge">🏠</div>' : ''}
+        <div class="poke-num">#${displayNum}</div>
+        <img class="poke-sprite" src="${SPRITE(e.nationalId)}" alt="${name}" loading="lazy" onerror="this.style.opacity=0.15">
+        <div class="poke-name">${name}</div>
+      </div>`;
+    }).join('');
+    return `<div class="gen-header"><span>${gen ? gen.name : 'Autres'}</span><span>${gc}/${entries.length}</span></div>
+    <div class="grid">${cards}</div>`;
+  }).join('');
+
+  root.innerHTML = `
+    ${state.error ? `<div class="err-banner">⚠️ ${state.error}</div>` : ''}
+    ${noGhHtml}
+    <div class="tabs-wrapper"><div class="tabs">${tabsHtml}</div></div>
+    <div class="stats-bar">
+      <div class="stat-card green"><div class="lbl">Capturés</div><div class="val">${capCnt}</div></div>
+      <div class="stat-card"><div class="lbl">Restants</div><div class="val">${total-capCnt}</div></div>
+      <div class="stat-card"><div class="lbl">Total</div><div class="val">${total}</div></div>
+      <div class="stat-card"><div class="lbl">Progression</div><div class="val">${pct}%</div></div>
+    </div>
+    <div class="progress-wrap"><div class="progress-fill" style="width:${pct}%"></div></div>
+    ${infoHtml}
+    ${state.namesLoading ? '<div class="names-note">⏳ Chargement des noms français...</div>' : ''}
+    <div class="controls">
+      <input class="search-box" type="search" placeholder="🔍 Rechercher..." value="${state.search.replace(/"/g,'&quot;')}" oninput="updateSearch(this.value)">
+      <div class="filters">
+        <button class="fbtn${state.filter==='all'?' active':''}" onclick="setFilter('all')">Tous</button>
+        <button class="fbtn${state.filter==='captured'?' active':''}" onclick="setFilter('captured')">✓ Capturés</button>
+        <button class="fbtn${state.filter==='missing'?' active':''}" onclick="setFilter('missing')">? Manquants</button>
+      </div>
+    </div>
+    <div class="batch-row">
+      <button class="bbtn" onclick="markAll(true)">✓ Tout cocher</button>
+      <button class="bbtn danger" onclick="markAll(false)">✗ Tout décocher</button>
+    </div>
+    ${filtered.length === 0 ? '<div class="empty-state">Aucun Pokémon trouvé</div>' : sections}
+  `;
+};
+
+window.switchGame = async id => {
+  state.activeGame = id; state.search = ''; state.filter = 'all'; render();
+  const ids = (gameLists[id]||[]).map(e => e.nationalId);
+  if (ids.some(i => !nameCache[i])) {
+    state.namesLoading = true; render();
+    await preloadNames(ids);
+    state.namesLoading = false; render();
+  }
+};
+window.doToggle = (g, id) => toggle(g, id);
+window.updateSearch = v => { state.search = v; render(); };
+window.setFilter = f => { state.filter = f; render(); };
+window.markAll = cap => {
+  const game = GAMES.find(g => g.id === state.activeGame);
+  const list = gameLists[game.id] || [];
+  const search = state.search.toLowerCase().trim();
+  const filtered = list.filter(e => {
+    const name = getName(e.nationalId).toLowerCase();
+    const ms = !search || name.includes(search) || String(e.nationalId).includes(search);
+    const c = isCap(game.id, e.nationalId);
+    const mf = state.filter==='all' || (state.filter==='captured'&&c) || (state.filter==='missing'&&!c);
+    return ms && mf;
+  });
+  filtered.forEach(e => {
+    const k = ckey(game.id, e.nationalId);
+    if (cap) { state.captured[k] = 1; state.captured[ckey('home', e.nationalId)] = 1; }
+    else delete state.captured[k];
+  });
+  saveLocal(); scheduleSave(); render();
+  showToast(cap ? `${filtered.length} Pokémon cochés !` : `${filtered.length} Pokémon décochés`);
+};
+
+window.openConfig = () => {
+  document.getElementById('cfg-user').value = ghConfig.user || '';
+  document.getElementById('cfg-repo').value = ghConfig.repo || 'living-dex';
+  document.getElementById('cfg-token').value = ghConfig.token || '';
+  document.getElementById('sync-status').textContent = '';
+  document.getElementById('overlay').classList.add('open');
+};
+window.closeConfig = () => document.getElementById('overlay').classList.remove('open');
+window.saveConfig = async () => {
+  ghConfig.user = document.getElementById('cfg-user').value.trim();
+  ghConfig.repo = document.getElementById('cfg-repo').value.trim();
+  ghConfig.token = document.getElementById('cfg-token').value.trim();
+  localStorage.setItem('ldex_gh', JSON.stringify(ghConfig));
+  const el = document.getElementById('sync-status');
+  el.textContent = 'Connexion...'; el.className = 'sync-status';
+  const ok = await ghLoad();
+  if (ok) {
+    el.textContent = '✅ Connecté ! Données synchronisées.'; el.className = 'sync-status ok';
+    render(); setTimeout(closeConfig, 1500);
+  } else {
+    el.textContent = '❌ Erreur : vérifie le token et le dépôt.'; el.className = 'sync-status err';
+  }
+};
+
+window.exportBackup = () => {
+  const data = JSON.stringify({captured:state.captured, names:nameCache, exportedAt:new Date().toISOString()}, null, 2);
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+  a.download = 'living-dex-backup.json'; a.click();
+};
+window.importBackup = () => document.getElementById('import-file').click();
+window.handleImport = e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const d = JSON.parse(ev.target.result);
+      state.captured = d.captured || {};
+      if (d.names) Object.assign(nameCache, d.names);
+      saveLocal(); scheduleSave(); render();
+      showToast('✅ Import réussi !'); closeConfig();
+    } catch(err) { showToast('❌ Fichier invalide'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+(async () => {
+  loadLocal();
+  const setBar = p => { const b = document.getElementById('lbar'); if(b) b.style.width = p+'%'; };
+  const errs = [];
+
+  for (let i = 0; i < GAMES.length; i++) {
+    const game = GAMES[i];
+    try {
+      let entries = [];
+      for (const slug of game.pokedexes) {
+        const part = await fetchDex(slug);
+        const seen = new Set(entries.map(e => e.nationalId));
+        part.forEach(e => { if (!seen.has(e.nationalId)) { entries.push(e); seen.add(e.nationalId); }});
+      }
+      gameLists[game.id] = entries.sort((a,b) => a.localNum - b.localNum);
+    } catch(e) {
+      errs.push(`${game.name}: ${e.message}`);
+      gameLists[game.id] = [];
+    }
+    setBar(Math.round(((i+1)/GAMES.length)*70));
+  }
+
+  if (errs.length) state.error = errs.join(' | ');
+  if (ghConfig.token) { await ghLoad(); setBar(85); }
+
+  state.loading = false;
+  setBar(100);
+  render();
+
+  state.namesLoading = true;
+  await preloadNames((gameLists['home']||[]).map(e => e.nationalId));
+  state.namesLoading = false;
+  render();
+})();
+</script>
+</body>
+</html>
