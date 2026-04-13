@@ -55,7 +55,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .batch-row { display: flex; gap: 6px; margin-bottom: 0.6rem; flex-wrap: wrap; }
 .bbtn { padding: 6px 11px; border: 1px solid #ddd; border-radius: 10px; background: #fff; cursor: pointer; font-size: 12px; color: #333; }
 .bbtn.danger { border-color: #f09595; color: #A32D2D; }
+/* Home only: grouped by generation */
 .gen-header { font-size: 11px; font-weight: 700; color: #888; margin: 0.9rem 0 0.35rem; padding-bottom: 3px; border-bottom: 1px solid #e8e8e8; display: flex; justify-content: space-between; }
+/* All games: flat grid, no grouping */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 5px; }
 .poke-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 5px 3px 4px; text-align: center; cursor: pointer; position: relative; user-select: none; transition: transform 0.1s; }
 .poke-card:active { transform: scale(0.92); }
@@ -127,7 +129,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 
 <script>
 const GAMES = [
-  { id:'home',    name:'Pokémon Home',     icon:'🏠', pokedexes:['national'],       isHome:true },
+  { id:'home',    name:'Pokémon Home',     icon:'🏠', pokedexes:['national'],        isHome:true },
   { id:'scarlet', name:'Écarlate',         icon:'🔴', pokedexes:['paldea'] },
   { id:'violet',  name:'Violet',           icon:'🟣', pokedexes:['paldea'] },
   { id:'sword',   name:'Épée',             icon:'⚔️', pokedexes:['galar'] },
@@ -137,6 +139,7 @@ const GAMES = [
   { id:'lgpe',    name:'Pikachu/Évoli',    icon:'⚡', pokedexes:['letsgo-kanto'] },
 ];
 
+// Générations — utilisées UNIQUEMENT pour Home (tri par génération)
 const GENS = [
   {id:1,name:'Génération I',   r:[1,151]},
   {id:2,name:'Génération II',  r:[152,251]},
@@ -154,12 +157,14 @@ const SPRITE = id => `https://raw.githubusercontent.com/PokeAPI/sprites/master/s
 const genOf = id => GENS.find(g => id >= g.r[0] && id <= g.r[1]);
 
 let nameCache = {};
+// gameLists[gameId] = [ {localNum, nationalId} ] trié par localNum
 let gameLists = {};
 let state = { activeGame:'home', search:'', filter:'all', captured:{}, loading:true, namesLoading:false, error:null };
 let ghConfig = { user:'', repo:'', token:'' };
 let syncTimer = null;
 let ghSha = null;
 
+// ── Persistence locale ──────────────────────────────────────────────────────
 const saveLocal = () => {
   try { localStorage.setItem('ldex_v4', JSON.stringify({captured:state.captured, names:nameCache})); } catch(e){}
 };
@@ -172,13 +177,14 @@ const loadLocal = () => {
   } catch(e){}
 };
 
+// ── GitHub Sync ─────────────────────────────────────────────────────────────
 const ghFile = () => `https://api.github.com/repos/${ghConfig.user}/${ghConfig.repo}/contents/living-dex-data.json`;
 const ghHeaders = () => ({'Authorization':`token ${ghConfig.token}`,'Content-Type':'application/json','Accept':'application/vnd.github.v3+json'});
 
 const ghLoad = async () => {
   if (!ghConfig.token) return false;
   try {
-    const res = await fetch(ghFile(), {headers: ghHeaders()});
+    const res = await fetch(ghFile(), {headers:ghHeaders()});
     if (res.status === 404) return true;
     if (!res.ok) return false;
     const data = await res.json();
@@ -212,14 +218,17 @@ const scheduleSave = () => {
   }, 1500);
 };
 
+// ── PokéAPI ─────────────────────────────────────────────────────────────────
 const fetchDex = async (slug) => {
   const res = await fetch(`${API}/pokedex/${slug}/`);
   if (!res.ok) throw new Error(`${slug} HTTP ${res.status}`);
   const data = await res.json();
+  // entry_number = numéro LOCAL dans ce Pokédex
+  // pokemon_species.url → numéro national
   return data.pokemon_entries.map(e => {
     const parts = e.pokemon_species.url.split('/').filter(Boolean);
-    return {localNum: e.entry_number, nationalId: parseInt(parts[parts.length-1], 10)};
-  }).sort((a,b) => a.localNum - b.localNum);
+    return { localNum: e.entry_number, nationalId: parseInt(parts[parts.length-1], 10) };
+  }).sort((a,b) => a.localNum - b.localNum); // trier par numéro LOCAL
 };
 
 const fetchName = async (id) => {
@@ -242,6 +251,7 @@ const preloadNames = async (ids) => {
   }
 };
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
 const ckey = (g, id) => `${g}_${id}`;
 const isCap = (g, id) => !!state.captured[ckey(g,id)];
 const getName = id => nameCache[id] || `#${id}`;
@@ -253,6 +263,7 @@ const toggle = (gid, nationalId) => {
     delete state.captured[k];
   } else {
     state.captured[k] = 1;
+    // Cocher dans un jeu → coche aussi dans Home
     if (gid !== 'home') state.captured[ckey('home', nationalId)] = 1;
   }
   saveLocal();
@@ -266,6 +277,7 @@ const showToast = msg => {
   setTimeout(() => t.classList.remove('show'), 2200);
 };
 
+// ── Render ──────────────────────────────────────────────────────────────────
 const render = () => {
   const root = document.getElementById('root');
   if (state.loading) return;
@@ -278,6 +290,7 @@ const render = () => {
   const search = state.search.toLowerCase().trim();
   const isHome = !!game.isHome;
 
+  // Filtrage
   const filtered = list.filter(e => {
     const name = getName(e.nationalId).toLowerCase();
     const ms = !search || name.includes(search) || String(e.nationalId).includes(search) || String(e.localNum).includes(search);
@@ -285,13 +298,6 @@ const render = () => {
     const mf = state.filter==='all' || (state.filter==='captured'&&cap) || (state.filter==='missing'&&!cap);
     return ms && mf;
   });
-
-  const grouped = {};
-  for (const e of filtered) {
-    const gen = genOf(e.nationalId); const gid = gen ? gen.id : 0;
-    if (!grouped[gid]) grouped[gid] = [];
-    grouped[gid].push(e);
-  }
 
   const tabsHtml = GAMES.map(g => {
     const c = capCount(g.id), t = (gameLists[g.id]||[]).length;
@@ -302,32 +308,54 @@ const render = () => {
   }).join('');
 
   const infoHtml = !isHome
-    ? `<div class="info-banner">ℹ️ Cocher un Pokémon ici le marque aussi dans <b>Pokémon Home</b> automatiquement.</div>` : '';
-
+    ? `<div class="info-banner">ℹ️ Cocher un Pokémon ici le marque aussi dans <b>Pokémon Home</b>.</div>` : '';
   const noGhHtml = !ghConfig.token
     ? `<div class="info-banner">⚙️ Configure GitHub (bouton ⚙️) pour synchroniser entre tes appareils.</div>` : '';
 
-  const sections = Object.entries(grouped).sort(([a],[b]) => +a - +b).map(([gid, entries]) => {
-    const gen = GENS.find(g => g.id === +gid);
-    const gc = entries.filter(e => isCap(game.id, e.nationalId)).length;
-    const cards = entries.map(e => {
+  let contentHtml = '';
+
+  if (isHome) {
+    // ── HOME : groupé par génération, trié par numéro national ──
+    const grouped = {};
+    for (const e of filtered) {
+      const gen = genOf(e.nationalId);
+      const gid = gen ? gen.id : 0;
+      if (!grouped[gid]) grouped[gid] = [];
+      grouped[gid].push(e);
+    }
+    contentHtml = Object.entries(grouped).sort(([a],[b]) => +a - +b).map(([gid, entries]) => {
+      const gen = GENS.find(g => g.id === +gid);
+      const gc = entries.filter(e => isCap('home', e.nationalId)).length;
+      const cards = entries.map(e => {
+        const cap = isCap('home', e.nationalId);
+        const name = getName(e.nationalId);
+        return `<div class="poke-card${cap?' captured':''}" onclick="doToggle('home',${e.nationalId})">
+          ${cap ? '<div class="poke-check"></div>' : ''}
+          <div class="poke-num">#${String(e.nationalId).padStart(4,'0')}</div>
+          <img class="poke-sprite" src="${SPRITE(e.nationalId)}" alt="${name}" loading="lazy" onerror="this.style.opacity=0.15">
+          <div class="poke-name">${name}</div>
+        </div>`;
+      }).join('');
+      return `<div class="gen-header"><span>${gen ? gen.name : 'Autres'}</span><span>${gc}/${entries.length}</span></div>
+      <div class="grid">${cards}</div>`;
+    }).join('');
+  } else {
+    // ── AUTRES JEUX : liste plate, triée par numéro LOCAL du Pokédex du jeu ──
+    // filtered est déjà trié par localNum (ordre du fetchDex)
+    const cards = filtered.map(e => {
       const cap = isCap(game.id, e.nationalId);
       const name = getName(e.nationalId);
-      const inHome = !isHome && isCap('home', e.nationalId) && !cap;
-      const displayNum = isHome
-        ? String(e.nationalId).padStart(4,'0')
-        : String(e.localNum).padStart(3,'0');
+      const inHome = isCap('home', e.nationalId) && !cap;
       return `<div class="poke-card${cap?' captured':''}${inHome?' home-only':''}" onclick="doToggle('${game.id}',${e.nationalId})">
         ${cap ? '<div class="poke-check"></div>' : ''}
         ${inHome ? '<div class="home-badge">🏠</div>' : ''}
-        <div class="poke-num">#${displayNum}</div>
+        <div class="poke-num">#${String(e.localNum).padStart(3,'0')}</div>
         <img class="poke-sprite" src="${SPRITE(e.nationalId)}" alt="${name}" loading="lazy" onerror="this.style.opacity=0.15">
         <div class="poke-name">${name}</div>
       </div>`;
     }).join('');
-    return `<div class="gen-header"><span>${gen ? gen.name : 'Autres'}</span><span>${gc}/${entries.length}</span></div>
-    <div class="grid">${cards}</div>`;
-  }).join('');
+    contentHtml = `<div class="grid">${cards}</div>`;
+  }
 
   root.innerHTML = `
     ${state.error ? `<div class="err-banner">⚠️ ${state.error}</div>` : ''}
@@ -354,10 +382,11 @@ const render = () => {
       <button class="bbtn" onclick="markAll(true)">✓ Tout cocher</button>
       <button class="bbtn danger" onclick="markAll(false)">✗ Tout décocher</button>
     </div>
-    ${filtered.length === 0 ? '<div class="empty-state">Aucun Pokémon trouvé</div>' : sections}
+    ${filtered.length === 0 ? '<div class="empty-state">Aucun Pokémon trouvé</div>' : contentHtml}
   `;
 };
 
+// ── Handlers ────────────────────────────────────────────────────────────────
 window.switchGame = async id => {
   state.activeGame = id; state.search = ''; state.filter = 'all'; render();
   const ids = (gameLists[id]||[]).map(e => e.nationalId);
@@ -437,6 +466,7 @@ window.handleImport = e => {
   e.target.value = '';
 };
 
+// ── Boot ────────────────────────────────────────────────────────────────────
 (async () => {
   loadLocal();
   const setBar = p => { const b = document.getElementById('lbar'); if(b) b.style.width = p+'%'; };
@@ -451,6 +481,7 @@ window.handleImport = e => {
         const seen = new Set(entries.map(e => e.nationalId));
         part.forEach(e => { if (!seen.has(e.nationalId)) { entries.push(e); seen.add(e.nationalId); }});
       }
+      // Trier par numéro local (ordre officiel du Pokédex du jeu)
       gameLists[game.id] = entries.sort((a,b) => a.localNum - b.localNum);
     } catch(e) {
       errs.push(`${game.name}: ${e.message}`);
@@ -466,6 +497,7 @@ window.handleImport = e => {
   setBar(100);
   render();
 
+  // Préchargement des noms FR pour Home en arrière-plan
   state.namesLoading = true;
   await preloadNames((gameLists['home']||[]).map(e => e.nationalId));
   state.namesLoading = false;
